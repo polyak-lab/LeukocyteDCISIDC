@@ -45,6 +45,7 @@ library(plyr)
 library(RColorBrewer)
 library(reshape2)
 library(rgl)
+library(scatterplot3d)
 library(spatstat)
 library(TDA)
 library(vegan)
@@ -138,12 +139,12 @@ ggCaterpillar <- function(re, QQ=TRUE, likeDotplot=TRUE) {
 The analyses conducted in this study come from a number of different sources:
 
 * FACS and I-FISH data (generated in house):
-    + FACS was performed on XX patient samples, separating cells according to CD markers
-    + IF was conducted on a cohort of 
-    + FISH for CCL cluster and ERBB2 was performed on a cohort of DCIS (XX samples, YY areas) and matched DCIS-IDC (XX samples, YY areas)
+    + FACS was performed on patient samples, separating cells according to CD markers
+    + IF for TIGIT and PD1
+    + FISH for CCL cluster and ERBB2 was performed on a cohort of DCIS (20 patients) and matched DCIS-IDC (18 samples)
 
 * RNA-seq data: 
-    + RNA-seq was performed on T-cells isolated from a set of XX patients in house
+    + RNA-seq was performed on T-cells isolated from a set of patients in house
     + Public data for IDCs was attained from TCGA
 
 * CN data:
@@ -275,6 +276,7 @@ ESTscore=read.csv("online_public_data/ESTIMATE_scores.csv", header=T)
 ESTscore$Description=gsub("\\.", "-", ESTscore$Description)
 ESTscore$Description=substr(ESTscore$Description, 3, 14)
 summary(ESTscore)
+ESTscore$TumPurity=cos(0.6049872018+0.0001467884*ESTscore$ESTIMATEScore)
 ```
 
 * Estimated neoantigen load from Table S4A from Rooney et al 2015
@@ -660,69 +662,12 @@ write.csv(AllDGEA, file="output/Supp_Table_3_Comined_DGEA_analyses.csv")
 
 There are `r nrow(tabPAR)` differentially expressed genes in null vs parous comparison of which `r length(intersect(unique(ImmPort$Symbol), rownames(tabPAR)))` genes intersect with the Immport database. 
 
-```{r, echoF}
+```{r, echo=F}
 #narrow down list of sig genes
 tabCS=tabCS$table[abs(tabCS$table$logFC)>1, ]
 tabA=tabA$table[abs(tabA$table$logFC)>1, ]
 tabB=tabB$table[abs(tabB$table$logFC)>1, ]
 tabC=tabC$table[abs(tabC$table$logFC)>1, ]
-```
-
-Look at the heatmap output:
-
-```{r, echo=F, eval=F}
-# List of genes differentially expressed in both edger and deseq2
-GeneListInt=unique(c(rownames(tabCS), rownames(tabC), rownames(tabA),
-                     rownames(tabB)))
-                     RowSideColA=factor(CombinedGeneList$Fn[match(GeneListInt, CombinedGeneList$Symbol)])
-RowSideColA=as.character(RowSideColA)
-
-# all genes
-# intersection of immune only
-x1=which(GeneListInt%in%CombinedGeneList$Symbol)
-
-# fix up category names
-RowSideColA=factor(RowSideColA[x1])
-RowSideColA2=as.character(RowSideColA)
-RowSideColA2[grep("TCR", RowSideColA)]="TCR"
-RowSideColA2[grep("IL[0-9]", RowSideColA)]="INTERLEUKIN"
-RowSideColA2[grep("Interleukin", RowSideColA)]="INTERLEUKIN"
-RowSideColA2[grep("B_CELL", RowSideColA)]="BCR"
-RowSideColA2[grep("B_LYMPHOCYTE", RowSideColA)]="BCR"
-RowSideColA2[grep("IFN", RowSideColA)]="Interferons"
-RowSideColA2[grep("INFECTION", RowSideColA)]="Antimicrobials"
-RowSideColA2[grep("TGF", RowSideColA)]="TGF"
-RowSideColA2[grep("TNF", RowSideColA)]="TNF"
-RowSideColA2[grep("PDGF", RowSideColA)]="PDGF"
-RowSideColA2[grep("COMPLEMENT", RowSideColA)]="PDGF"
-RowSideColA2[grep("BCR", RowSideColA)]="BCR"
-RowSideColA2[grep("CCR", RowSideColA)]="Cytokines"
-RowSideColA2[grep("Cytokine", RowSideColA)]="Cytokines"
-RowSideColA2[grep("INSULIN", RowSideColA)]="Cytokines"
-RowSideColA2[grep("FC", RowSideColA)]="Antimicrobials"
-RowSideColA3=RowSideColA2
-RowSideColA2=factor(RowSideColA2)
-RowSideColA2[RowSideColA2=="NA"]=NA
-
-l1=which(duplicated(CombinedGeneList$Symbol))
-
-lList=unique(CombinedGeneList$Symbol[l1])
-GRef=rep(NA, length(lList))
-
-for(i in 1:length(lList)){
-  ll1=which(CombinedGeneList$Symbol==lList[i])
-  GRef[i]=paste(na.omit(unique(CombinedGeneList$Fn[ll1])), collapse=", ")
-}
-
-NewList=data.frame(Symbol=c(as.character(lList),as.character(CombinedGeneList$Symbol[-l1])), Fn=c(as.character(GRef), as.character(CombinedGeneList$Fn[-l1])))
-
-l2=match(rownames(GEnewfilt), NewList$Symbol)
-temp=NewList[l2, ]
-
-tol14rainbow=c(brewer.pal(12, "Paired"), "black", "grey")
-levels(RowSideColA2)=tol14rainbow
-
-heatmap.2(logCPM[GeneListInt[x1], ], scale = "none", col=HMPallete[11:1], ColSideColors = ColSide, trace="none")
 ```
 
 
@@ -894,34 +839,6 @@ print('look only at genes which are associated with TCell response')
 t1=heatmap.2(logCPM[GeneListInt[x1[l2]], ], scale = "none", col=HMPallete[11:1], RowSideColors =as.character(RowSideColA2[l2]), trace="none", ColSideColors = ColSide)
 ```
 
-% Also look for genes which are associated with activation, exhaustion signatures:
-
-```{r, echo=F, eval=F}
-HitList=(c(GeneListAct$Activated, GeneListAct$Inhibitory, GeneListAct$Cytotoxic,
-          GeneListAct$Exhausted, GeneListAct$Naive))
-RowSide=c(rep("red", length(GeneListAct$Activated)), rep("blue", length(GeneListAct$Inhibitory)), rep("pink", length(GeneListAct$Cytotoxic)),
-          rep("darkblue", length(GeneListAct$Exhausted)), rep("grey",length(GeneListAct$Naive)))
-HitList2=unique(c(GeneListAct$Activation, GeneListAct$Dysfunction))
-RowSide2=c(rep("red", length(GeneListAct$Activation)), rep("blue", length(GeneListAct$Dysfunction)))
-
-heatmap.2(logCPM[HitList, ], scale = "none", col=HMPallete[11:1], ColSideColors = ColSide, trace="none", RowSideColors = RowSide)
-
-heatmap.2(logCPM[HitList2, ], scale = "none", col=HMPallete[11:1], ColSideColors = ColSide, trace="none", RowSideColors = RowSide2)
-```
-
-% Also narrow down the list only genes which are significant:
-
-```{r, echo=F, eval=F}
-a1=as.character(GeneListInt[as.character(GeneListInt) %in% c(HitList, HitList2)])
-RS2=rep("red", length(a1))
-RS2[a1%in%GeneListAct$Dysfunction]="blue"
-RS2[a1%in%GeneListAct$Inhibitory]="blue"
-RS2[a1%in%GeneListAct$Exhausted]="darkblue"
-RS2[a1%in%GeneListAct$Naive]="grey"
-heatmap.2(logCPM[match(a1, rownames(logCPM)), ], scale = "none", col=HMPallete[11:1], ColSideColors = ColSide, trace="none",
-          RowSideColors = RS2)
-```
-
 
 ```{r, echo=F}
 # Do heatmaps for DCIS vs N, DCIS vs IDC, IDC vs N and HvB independently
@@ -960,11 +877,14 @@ RCN[grep("INSULIN", RCN)]="Cytokines"
 RCN[grep("INNATE", RCN)]="Innate_Immune_System"
 RCN[grep("FC", RCN)]="Antimicrobials"
 RCN=factor(RCN)
+RCN2=RCN
 RNidx=which(RCN=="REACTOME_IMMUNE_SYSTEM")
 tol14rainbow=c(brewer.pal(12, "Paired"), "black")
 levels(RCN)=tol14rainbow
 
 heatmap.2(logCPM[LCall[setdiff(which(varVal>3), RNidx)], ],scale="none",  col=HMPallete[11:1], ColSideColors = ColSide, trace="none", RowSideColors = as.character(RCN[setdiff(which(varVal>3), RNidx)]))
+
+barplot(1:13, col=tol14rainbow, names=levels(RCN2), las=2)
 ```
 
 # Gene Set enrichment analysis: Figure 2
@@ -1410,20 +1330,6 @@ ggplot(CresT2, aes(x=Var2 , y=value, fill=Var1))+geom_bar(stat="identity")+theme
 ```
 
 
-```{r, eval=F, echo=F}
-#Boxplot of the different cell types across the different sets:
-ggplot(CresT2, aes(x=Var1 , y=value, fill=Var1))+geom_boxplot(stat="boxplot")+theme(axis.text.x = element_text(angle = 90))+facet_grid(~type,drop=TRUE, scale="free", space="free_x")+theme_bw()+scale_fill_brewer(palette = "Accent")
-```
-
-
-
-```{r, eval=F, echo=F}
-#Separate the different subtypes:
-CresT2$type[which(CresT2$Var2%in%l2)]="TN"
-CresT2$type[which(CresT2$Var2%in%l1)]="HER2"
-ggplot(CresT2, aes(x=Var1 , y=value, fill=Var1))+geom_boxplot(stat="boxplot")+theme(axis.text.x = element_text(angle = 90))+facet_grid(~type,drop=TRUE, scale="free", space="free_x")+theme_bw()+scale_fill_brewer(palette = "Accent")
-```
-
 Rescale values to take into account T-cell specific content?
 
 ```{r}
@@ -1566,13 +1472,6 @@ RSC=c(rep("orange", sum(GeneListAct$Activation%in%rownames(logCPM))), rep("light
 a1=heatmap.2(CCVals, col=HMPallete[11:1], ColSideColors = Ki67Vals, RowSideColors = RSC, scale="none", trace="none")
 ```
 
-```{r, eval=F}
-#CCVals2=ddsCounts[na.omit(match(c(GeneListAct$Activation, GeneListAct$Dysfunction), rownames(logCPM))),  ]
-#a1=heatmap.2(log(CCVals2+1), col=HMPallete[11:1], ColSideColors = Ki67Vals, RowSideColors = RSC, scale="none", trace="none")
-
-CCVals2=newvstCounts[na.omit(match(c(GeneListAct$Activation, GeneListAct$Dysfunction), rownames(logCPM))),  ]
-a1=heatmap.2(CCVals2, col=HMPallete[11:1], ColSideColors = Ki67Vals, RowSideColors = RSC, trace="none")
-```
 
 ## Analysis of TIGIT staining the CD3+ cells
 
@@ -1622,7 +1521,7 @@ Here, the spatial information from IF is captured, highlighting the different ce
 
 As an example:
 
-```{r FigS6, fig.height=4}
+```{r FigS6tig, fig.height=4}
 ## plot TIGIT CD3 positive cells
 #pdf('TIGIT CD3.pdf', useDingbats = FALSE)
 par(mfrow = c(1, 2), las = 1, tcl = .1, xaxs = 'i', yaxs = 'i')
@@ -1663,18 +1562,118 @@ for (i in 1:length(tigit.samples)){
 Now, following our summary of the data, we can compare the differences between the distributions:
 
 ```{r FigS6B, echo=F}
-par(mfrow = c(1, 1), las = 1, tcl = .1, xaxs = 'i', yaxs = 'i')
+par(mfrow = c(1, 2), las = 1, tcl = .1, xaxs = 'i', yaxs = 'i')
 boxplot((1 - distance.tigit[, 1]) * 100 ~ distance.tigit[, 2], names = tigit.cells$V1, 
         col = c("#8000FF","#D8BFD8", "#FF0000", "#FF6FCF"), ylab = 'Invasive percentage', ylim = c(0, 70))
 lines(c(1, 2), c(54, 54), lwd = 2)
-text(1.5, 60, 'p-value = 0.047')
+text(1.5, 60, 'p-value = 0.19')
 lines(c(3, 4), c(54, 54), lwd = 2)
-text(3.5, 60, 'p-value = 0.003')
+text(3.5, 60, 'p-value = 0.006')
 print('t-test group 1 vs 2')
 t.test(distance.tigit[distance.tigit[ ,2]<3, 1]~distance.tigit[distance.tigit[ ,2]<3, 2])
 print('t-test group 3 vs 4')
 t.test(distance.tigit[distance.tigit[ ,2]>2, 1]~distance.tigit[distance.tigit[ ,2]>2, 2])
 ```
+
+## PD1 staining 
+
+Do the same analysis for PD1 staining:
+
+```{r}
+pd1 <- read.csv('data/PD1.csv', stringsAsFactors = FALSE, header = FALSE)[-1, -1]
+pd1.indices <- NULL
+pd1.cells <- NULL
+for (i in 1:nrow(pd1)) {
+    for (j in 1:ncol(pd1)) {
+        if (is.na(pmatch('M-', pd1[i, j])) == FALSE) {
+            pd1.indices <- rbind(pd1.indices, c(i, j))
+        }
+        if (is.na(pmatch('Her2', pd1[i, j])) == FALSE | is.na(pmatch('HER2', pd1[i, j])) == FALSE | is.na(pmatch('TN', pd1[i, j])) == FALSE | is.na(pmatch('tn', pd1[i, j])) == FALSE) {
+            pd1.cells <- rbind(pd1.cells, c(pd1[i, j], i, j))
+        }
+    }
+}
+pd1.cells <- as.data.frame(data.matrix(pd1.cells), stringsAsFactors = FALSE)
+pd1.cells$V1[1] <- "Her2+ DCIS"
+pd1.cells$V1[5] <- 'Her2+ DCIS'
+
+pd1.sample.names <- pd1[pd1.indices]
+unique.rows <- c(unique(pd1.indices[, 1]), nrow(pd1) + 1)
+pd1.samples <- NULL
+for (i in 1:(nrow(pd1.indices))) {
+    temp <- pd1[(pd1.indices[i, 1] + 1):(unique.rows[which(unique.rows == pd1.indices[i, 1]) + 1] - 1), pd1.indices[i, 2]:(pd1.indices[i, 2] + 10)]
+    temp.end <- which(temp[, 1] == '')[1]
+    if (is.na(temp.end) == FALSE) {
+        temp <- temp[1:(temp.end - 1), ]
+    }
+    temp.col <- temp[1, ]
+    temp <- as.data.frame(data.matrix(temp[-1, ]))
+    colnames(temp) <- temp.col
+    pd1.samples[[i]] <- list()
+    pd1.samples[[i]]$table <- temp
+    pd1.samples[[i]]$cell <- pd1.cells[tail(which(as.numeric(pd1.cells$V2) <= pd1.indices[i, 1]), n = 1), 1]
+}
+Types.pd1 <- c('PD1+ T cells', 'PD1- T cells', 'PD1+ tumor cells', 'PD1- tumor cells')
+Types.pd1.indices <- c(1, 2, 3, 4)
+Cols <- c('black', 'red', 'forestgreen', 'gold2')
+```
+
+```{r FigS6, fig.height=4}
+## plot pd1 CD3 positive cells
+#pdf('pd1 CD3.pdf', useDingbats = FALSE)
+par(mfrow = c(1, 2), las = 1, tcl = .1, xaxs = 'i', yaxs = 'i')
+for (i in 1:2) {
+  # change 1 to length(pd1.samples)
+    plot(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], col = Cols[sapply(pd1.samples[[i]]$table$Type[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], function(t) which(Types.pd1.indices == t))], pch = 19, xlab = 'X coordinate', ylab = 'Y coordinate', main = paste0(pd1.sample.names[i], ': ', pd1.samples[[i]]$cell), xlim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10), ylim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10))
+    legend('topleft', Types.pd1, col = Cols, text.col = Cols, pch = 19)
+} 
+```
+
+Here, we now analyse the spatial distributions between the different samples: Use k means to 
+using a spatial uniform Poisson process and MC simulation to generate spatial distributions under the null hypothesis (that cells are random) and compared them to our images using the cross K function.
+
+```{r}
+set.seed(1234)
+distance.pd1 <- NULL
+for (i in 1:length(pd1.samples)) {
+    neg.T <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 2], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 2]))
+    pos.T <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 1], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 1]))
+    neg.C <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 4], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 4]))
+    pos.C <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 3], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 3]))
+    T <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 2 | pd1.samples[[i]]$table$Type == 1], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 2 | pd1.samples[[i]]$table$Type == 1]))
+    C <- as.data.frame(cbind(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type == 4 | pd1.samples[[i]]$table$Type == 3], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type == 4 | pd1.samples[[i]]$table$Type == 3]))
+    colnames(neg.T) <- colnames(pos.T) <- colnames(neg.C) <- colnames(pos.C) <- colnames(T) <- colnames(C) <- c('x', 'y')
+    TC <- rbind(T, C)
+    
+    if (i==1){
+    plot(pd1.samples[[i]]$table$X[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], pd1.samples[[i]]$table$Y[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], col = Cols[sapply(pd1.samples[[i]]$table$Type[pd1.samples[[i]]$table$Type %in% Types.pd1.indices], function(t) which(Types.pd1.indices == t))], pch = 19, xlab = 'X coordinate', ylab = 'Y coordinate', main = paste0(pd1.sample.names[i], ': ', pd1.samples[[i]]$cell), xlim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10), ylim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10))
+    }
+    km.TC <- kmeans(TC, centers = 2)
+    if (i==1){
+    plot(T$x, T$y, pch = 1, main = paste0(pd1.sample.names[i], ': ', pd1.samples[[i]]$cell), xlim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10), ylim = c(min(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) - 10, max(pd1.samples[[i]]$table$Y, pd1.samples[[i]]$table$X) + 10), xlab = 'X coordinates', ylab = 'Y coordinates')
+    points(C$x, C$y, pch = 2)
+    points(TC$x, TC$y, col = km.TC$cluster)
+    }
+    distance.pd1 <- rbind(distance.pd1, c(max(length(which(km.TC$cluster[1:nrow(T)] == 1)) / nrow(T), length(which(km.TC$cluster[1:nrow(T)] == 2)) / nrow(T)), which(unique(pd1.cells$V1) == pd1.samples[[i]]$cell)))
+}
+```
+
+Now, following our summary of the data, we can compare the differences between the distributions:
+
+```{r FigS6Bpd1, echo=F}
+par(mfrow = c(1, 2), las = 1, tcl = .1, xaxs = 'i', yaxs = 'i')
+boxplot((1 - distance.pd1[distance.pd1[, 2] == 2, 1]) * 100, (1 - distance.pd1[distance.pd1[, 2] == 1, 1]) * 100, (1 - distance.pd1[distance.pd1[, 2] == 4, 1]) * 100, (1 - distance.pd1[distance.pd1[, 2] == 3, 1]) * 100, names = c('Her2+ IDC', 'Her2+ DCIS', 'TN IDC', 'TN DCIS'), col =  c("#8000FF","#D8BFD8", "#FF0000", "#FF6FCF"), ylab = 'Invasive percentage', ylim = c(0, 70))
+lines(c(1, 2), c(54, 54), lwd = 2)
+text(1.5, 60, 'p-value = 0.96')
+lines(c(3, 4), c(54, 54), lwd = 2)
+text(3.5, 60, 'p-value = 0.012')
+
+print('t-test group 1 vs 2')
+t.test(distance.pd1[distance.pd1[ ,2]<3, 1]~distance.pd1[distance.pd1[ ,2]<3, 2])
+print('t-test group 3 vs 4')
+t.test(distance.pd1[distance.pd1[ ,2]>2, 1]~distance.pd1[distance.pd1[ ,2]>2, 2])
+```
+
 
 # TCR clonality
 
@@ -1832,7 +1831,7 @@ Make a linear model to explain exhaustion or activation status in these cases
 
 ```{r, cache=F}
 ActivationScore=colMedians(TCGAlogCPM[GeneListAct$Activated, ], na.rm=TRUE)
-CytoScore=colMedians(TCGAlogCPM[ GeneListAct$Cytotoxic,], na.rm=TRUE)
+CytoScore=colMeans(TCGAlogCPM[c("IFNG", "GZMB", "GZMA"),], na.rm=TRUE)
 ExhScore=colMedians(TCGAlogCPM[GeneListAct$Exhausted, ], na.rm=TRUE)
 InhScore=colMedians(TCGAlogCPM[match(GeneListAct$Inhibitory, rownames(TCGAlogCPM)), ], na.rm=TRUE)
 
@@ -1842,9 +1841,11 @@ MatchData=data.frame(Pat=colnames(NewGistic),CN=PDScores,
                     ExhScore=ExhScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                      InhScore=InhScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                      Neo=NeoData$Predicted.NeoAgs[match(colnames(NewGistic), NeoData$PatientID)],
-                     CNA=TCGAClin$Copy.Number.Alterations[match(colnames(NewGistic), TCGAClin$PATIENT_ID)], 
+                     CNA=TCGAClin$Copy.Number.Alterations[match(colnames(NewGistic), TCGAClin$PATIENT_ID)],
+                    PDL1exp=TCGAlogCPM["CD274",match(colnames(NewGistic), colnames(TCGAlogCPM))],
                      Subtype=TCGAClin$PAM50[match(colnames(NewGistic), TCGAClin$PATIENT_ID)], 
                      EST=ESTscore$ImmuneScore[match(colnames(NewGistic), ESTscore$Description)],
+                    Purity=ESTscore$TumPurity[match(colnames(NewGistic), ESTscore$Description)],
                      Age=as.numeric(as.character(TCGAClin$Age[match(colnames(NewGistic), TCGAClin$PATIENT_ID)])))
 
 # model probability of co-amplification
@@ -1876,86 +1877,52 @@ A4=summary(mod1I)
 A4
 ```
 
-```{r, eval=F}
-# Narrow this down to just samples which are basal-like
+Plot PDL1 CN, gene expression and see if there is a relationship with CD8 expression
+
+```{r}
+library(fANCOVA)
 l1=which(MatchData$Subtype=="Basal")
 
-mod2A=glm(ActScore~CN+log(Neo+1)+CNA+EST+log(Age), data=MatchData[l1, ])
-A1=summary(mod2A)
-mod2C=glm(CytoScore~CN+log(Neo+1)+CNA+EST+log(Age), data=MatchData[l1, ])
-A2=summary(mod2C)
-mod2E=glm(ExhScore~CN+log(Neo+1)+CNA+EST+log(Age), data=MatchData[l1, ])
-A3=summary(mod2E)
-mod2I=glm(InhScore~CN+log(Neo+1)+CNA+EST+log(Age), data=MatchData[l1, ])
-A4=summary(mod2I)
+require(geoR)
+elevation.loess = loess(CytoScore~CN*PDL1exp, data = MatchData[l1, ], loess=0.6, degree=1)
+elevation.fit = expand.grid(list(CN = seq(-1.5,2.2, length=30), PDL1exp = seq(-8, 6, length=30)))
+z = predict(elevation.loess, newdata = elevation.fit)
+elevation.fit$z = as.numeric(z)
+
+image(seq(-1.5,2.2, length=30), seq(-8, 6, length=30), z,
+  xlab = "CN", ylab = "PDL1 expr",
+  main = "Surface elevation data", col=HMPallete[11:1])
+
+# plot the colour bar
+zquant=quantile(z, probs=seq(0, 1, length=10), na.rm=TRUE)
+
+image( zquant,c(1,2), cbind(zquant, zquant), col=HMPallete[11:1])
+
+A=seq(-1.5,2.2, length=30)
+B=seq(-8, 6, length=30)
+spacing=matrix(NA, length(A)-1, length(B)-1)
+
+for(i in 1:29){
+  for(j in 1:29){
+    spacing[i,j]=length(which(MatchData$CN[l1]>=A[i] & MatchData$CN[l1]<A[i+1] & 
+                                MatchData$PDL1exp[l1]>=B[j]&MatchData$PDL1exp[l1]<B[j+1]))
+  }
+}
+
+spacing[spacing>0]=spacing[spacing>0]+20
+
+image(seq(-1.5,2.2, length=30), seq(-8, 6, length=30), spacing,
+  xlab = "CN", ylab = "PDL1 expr",
+  main = "Surface elevation data", col=HMPallete[11:1])
+
+
+par(mfrow=c(1,2))
+plot(MatchData$CN[l1], MatchData$CytoScore[l1], main="CN", ylab="cytoscore", xlab="CN")
+plot(MatchData$PDL1exp[l1], MatchData$CytoScore[l1], main="PDL1 GE", ylab="cytoscore", xlab="pdl1exp")
+
+a1=lm(CytoScore~CN*PDL1exp+Purity, data=MatchData)
 ```
 
-Use the leaps package to find the best model for CCL amplification
-
-```{r, echo=F, eval=F}
-regsubsets.out <-
-    regsubsets(CN~log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.out)
-par(mfrow=c(1,2))
-plot(regsubsets.out, scale="adjr2", main="adj R^2")
-plot(regsubsets.out, scale="bic", main="BIC")
-
-mod1B=glm(CN~log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData)
-X=summary(mod1B)
-A=coefficients(X)
-```
-
-Do the same for actviation status etc
-
-```{r, echo=F, eval=F}
-regsubsets.act <-
-    regsubsets(ActScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.act)
-par(mfrow=c(1,2))
-plot(regsubsets.act, scale="adjr2", main="adj R^2")
-plot(regsubsets.act, scale="bic", main="BIC")
-
-regsubsets.cyt <-
-    regsubsets(CytoScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.cyt)
-par(mfrow=c(1,2))
-plot(regsubsets.cyt, scale="adjr2", main="adj R^2")
-plot(regsubsets.cyt, scale="bic", main="BIC")
-
-regsubsets.exh <-
-    regsubsets(ExhScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.exh)
-par(mfrow=c(1,2))
-plot(regsubsets.exh, scale="adjr2", main="adj R^2")
-plot(regsubsets.exh, scale="bic", main="BIC")
-
-regsubsets.inh <-
-    regsubsets(InhScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.inh)
-par(mfrow=c(1,2))
-plot(regsubsets.inh, scale="adjr2", main="adj R^2")
-plot(regsubsets.inh, scale="bic", main="BIC")
-```
 
 ## Oslo cohort
 Look at the PD1 locus from data from Oslo:
@@ -2050,15 +2017,6 @@ CSC[CSC=="Normal"]="green"
 xx1=heatmap.2(data.matrix(TCGAlogCPM[na.omit(match(c(GeneListAct$Cytotoxic, GeneListAct$Activated, GeneListAct$Inhibit), rownames(TCGAlogCPM))),c(na.omit(m1), na.omit(m2))]), trace="none", col=HMPallete[11:1], ColSideColors = c(rep("black", length(na.omit(m1))), rep("#FFCC00", length(na.omit(m2)))) , RowSideColors =RSC)
 ```
 
-```{r, eval=F}
-ActMarkers=TCGAlogCPM[c("GZMB", "IFNG", "GZMA", "PTPRC"), c(na.omit(m1), na.omit(m2), m3)]
-ActMarkers=data.frame(t(ActMarkers), Grp=c(rep("her2-like", length(na.omit(m1)) ), rep("lum-like", length(na.omit(m2))), rep("lumHER2amp", length(m3))), Name=colnames(ActMarkers))
-
-act2=melt(ActMarkers)
-
-ggplot(aes(y = value, x = Grp, fill = Grp), data = act2) +geom_boxplot()+ facet_wrap(~variable)+ theme_bw()
-
-```
 
 ```{r}
 # Plot heatmap of activation related genes with HER2/Lum/amp status:
@@ -2129,92 +2087,6 @@ mod1I=glm(InhScore~CN+log(Neo+1)+Subtype+EST+log(Age), data=MatchData[l1, ])
 summary(mod1I)
 ```
 
-```{r, eval=F}
-## assess entire cohort
-
-mod2A=glm(ActScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData)
-A1=summary(mod2A)
-mod2C=glm(CytoScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData)
-A2=summary(mod2C)
-mod2E=glm(ExhScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData)
-A3=summary(mod2E)
-mod2I=glm(InhScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData)
-A4=summary(mod2I)
-```
-
-
-```{r, echo=F, eval=F}
-#Use the leaps package to find the best model for CCL amplification
-
-regsubsets.out <-
-    regsubsets(CN~ERBB2+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.out)
-par(mfrow=c(1,2))
-plot(regsubsets.out, scale="adjr2", main="adj R^2")
-plot(regsubsets.out, scale="bic", main="BIC")
-
-```
-
-```{r, echo=F, eval=F}
-regsubsets.act <-
-    regsubsets(ActScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.act)
-par(mfrow=c(1,2))
-plot(regsubsets.act, scale="adjr2", main="adj R^2")
-plot(regsubsets.act, scale="bic", main="BIC")
-
-regsubsets.cyt <-
-    regsubsets(CytoScore~CN+log(Neo+1)+CNA+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.cyt)
-par(mfrow=c(1,2))
-plot(regsubsets.cyt, scale="adjr2", main="adj R^2")
-plot(regsubsets.cyt, scale="bic", main="BIC")
-mod1B=glm(CytoScore~ERBB2+Subtype+EST, data=MatchData[MatchData$Subtype!="Normal", ])
-X=summary(mod1B)
-A=coefficients(X)
-
-regsubsets.exh <-
-    regsubsets(ExhScore~CN+log(Neo+1)+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.exh)
-par(mfrow=c(1,2))
-plot(regsubsets.exh, scale="adjr2", main="adj R^2")
-plot(regsubsets.exh, scale="bic", main="BIC")
-
-regsubsets.inh <-
-    regsubsets(InhScore~CN+log(Neo+1)+Subtype+EST+log(Age), data=MatchData,
-               nbest = 1,       # 1 best model for each number of predictors
-               nvmax = NULL,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL,
-               method = "exhaustive")
-summary(regsubsets.inh)
-par(mfrow=c(1,2))
-plot(regsubsets.inh, scale="adjr2", main="adj R^2")
-plot(regsubsets.inh, scale="bic", main="BIC")
-```
-
-
-```{r, echo=F, eval=F}
-#Check for scores only in the HER2 cases:
-mod1B=glm(InhScore~CN+EST+log(Neo+1)+log(Age), data=MatchData[MatchData$Subtype=="Her2", ])
-X=summary(mod1B)
-A=coefficients(X)
-```
 
 ## Oslo Dataset: Figure 4
 
@@ -2266,25 +2138,6 @@ ContTable(table(OsloGistLogR$her2_amplified[nidx],OsGismeanl2[nidx]), title = "D
 ContTable(table(OsloGistLogR$her2_amplified[-nidx], OsGismeanl2[-nidx]), title = "IDC", xlabL = "HER2 amplified", ylabL = "CCL amplified", chisqtest = T)
 ```
 
-
-%### Combined heatmap 
-
-%Combined heatmap using both PD1 info and CCL
-
-```{r, eval=F}
-Ndata=cbind(OsloGistLogR[ ,na.omit(a1)], OsloGist2[ ,c(4:5)])
-Ndata[which(Ndata>2, arr.ind=T)]=1.5
-
-a1=heatmap.2(data.matrix(Ndata), col=HMPallete[11:1], Colv = NA,scale="none",trace="none", RowSideColors =as.character(as.numeric(OsloGist2$tissue)))
-
-a2=c(intersect(a1$rowInd, nidx), intersect(a1$rowInd, which(OsloGist2$tissue=="IDC")))
-
-l1=c(a1$rowInd[OsloGist2$tissue=="DCIS"], a1$rowInd[OsloGist2$tissue=="IDC"])
-
-heatmap.2(data.matrix(Ndata[a2, ]), col=HMPallete[11:1], Colv = NA,Rowv=NA, scale="none",trace="none", RowSideColors =as.character(as.numeric(OsloGist2$tissue[a2])))
-
-heatmap.2(data.matrix(Ndata[a2, ]), col=HMPallete[11:1], scale="none",Colv = NA,Rowv=NA, trace="none", RowSideColors =OsIdNew[a2])           
-```
 
 
 # CCL-ERBB2 amplification based on FISH images: Figure 5
@@ -2384,12 +2237,12 @@ prop.mat.slides$NoHer2.Sample_ID <- 20 * prop.mat.slides$Sample_ID - 16
 par(mfrow = c(1, 1), las = 1, cex.axis = 1.5, tcl = 0.1, xaxs = 'i', yaxs = 'i')
 
 beeswarm(prop.mat.slides$Her2.DCIS ~ prop.mat.slides$Her2.Sample_ID, 
-         col = 'pink1', xlab = 'Patient IDs', ylab = 'Proportion of cells with chemokine cluster amplification', lwd = 1.5, cex.lab = 1.5, pch = 19, labels = unique(prop.mat.slides$Sample_ID), main = 'DCIS-Only Cohort', cex = 1.5, at = unique(prop.mat.slides$Her2.Sample_ID), xlim = c(-5, 395), cex.main = 1.5)
+         col = 'pink1', xlab = 'Patient IDs', ylab = 'Proportion of cells with chemokine cluster amplification', lwd = 1.5, cex.lab = 1.5, pch = 19, labels = unique(prop.mat.slides$Sample_ID), main = 'DCIS-Only Cohort', cex = 1.5, at = unique(prop.mat.slides$Her2.Sample_ID), xlim = c(-5, 400), cex.main = 1.5)
 
 beeswarm(prop.mat.slides$NoHer2.DCIS ~ prop.mat.slides$NoHer2.Sample_ID, col = 'black', lwd = 1.5, pch = 19, add = TRUE, 
          cex = 1.5, at = unique(prop.mat.slides$NoHer2.Sample_ID))
 for (i in (20 * prop.mat.slides$Sample_ID)) {
-	lines(c(i+5, i+5), c(-0.5, 2))
+	lines(c(i, i), c(-0.5, 2))
 }
 
 
@@ -2927,14 +2780,10 @@ leukocytes <- read.csv('data/leukocytes_dcis_idc.csv', stringsAsFactors = FALSE)
 leukocytes <- leukocytes[-which(is.na(leukocytes$image.) == TRUE), ]
 leukocytes <- leukocytes[-which(leukocytes$cd45 == 'IDC'), ]
 
-#folders=unique(leukocytes$Pathology.No)
-
 leukocytes$cd45 <- as.numeric(leukocytes$cd45)
 leukocytes.ave.cd45 <- sapply(1:18, function(i) mean(leukocytes[leukocytes$Pa == i, 3], na.rm = TRUE))
 leukocytes.ave.cd3 <- sapply(1:18, function(i) mean(leukocytes[leukocytes$Pa == i, 4], na.rm = TRUE))
 leukocytes.ave.cd3p <- sapply(1:18, function(i) mean(leukocytes[leukocytes$Pa == i, 4] / leukocytes[leukocytes$Pa == i, 3], na.rm = TRUE))
-
-leukocytes.ave.cd3[is.na(leukocytes.ave.cd3)]=0
 
 plot(leukocytes.ave.cd3, diversity.mat.ave$HER2.CCluster.bin[diversity.mat.ave$Type == 0], ylab = 'Average Shannon indices', main = 'DCIS-IDC Cohort', xlab = 'CD3 count', col = 'black', pch = 19, cex = 1)
 points(leukocytes.ave.cd3, diversity.mat.ave$HER2.CCluster.bin[diversity.mat.ave$Type == 1], col = 'red', pch = 19, cex = 1)
