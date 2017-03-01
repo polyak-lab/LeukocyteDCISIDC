@@ -1831,13 +1831,15 @@ Make a linear model to explain exhaustion or activation status in these cases
 
 ```{r, cache=F}
 ActivationScore=colMedians(TCGAlogCPM[GeneListAct$Activated, ], na.rm=TRUE)
-CytoScore=colMeans(TCGAlogCPM[c("IFNG", "GZMB", "GZMA"),], na.rm=TRUE)
+CytoScore2=colMeans(TCGAlogCPM[c("IFNG", "GZMB", "GZMA"),], na.rm=TRUE)
+CytoScore=colMedians(TCGAlogCPM[GeneListAct$Cytotoxic,], na.rm=TRUE)
 ExhScore=colMedians(TCGAlogCPM[GeneListAct$Exhausted, ], na.rm=TRUE)
 InhScore=colMedians(TCGAlogCPM[match(GeneListAct$Inhibitory, rownames(TCGAlogCPM)), ], na.rm=TRUE)
 
 MatchData=data.frame(Pat=colnames(NewGistic),CN=PDScores,
                      ActScore=ActivationScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                     CytoScore=CytoScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
+                    CytoScore2=CytoScore2[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                     ExhScore=ExhScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                      InhScore=InhScore[match(colnames(NewGistic), colnames(TCGAlogCPM))],
                      Neo=NeoData$Predicted.NeoAgs[match(colnames(NewGistic), NeoData$PatientID)],
@@ -1884,7 +1886,7 @@ library(fANCOVA)
 l1=which(MatchData$Subtype=="Basal")
 
 require(geoR)
-elevation.loess = loess(CytoScore~CN*PDL1exp, data = MatchData[l1, ], loess=0.6, degree=1)
+elevation.loess = loess(CytoScore2~CN*PDL1exp, data = MatchData[l1, ], loess=0.6, degree=1)
 elevation.fit = expand.grid(list(CN = seq(-1.5,2.2, length=30), PDL1exp = seq(-8, 6, length=30)))
 z = predict(elevation.loess, newdata = elevation.fit)
 elevation.fit$z = as.numeric(z)
@@ -1918,9 +1920,9 @@ image(seq(-1.5,2.2, length=30), seq(-8, 6, length=30), spacing,
 
 par(mfrow=c(1,2))
 plot(MatchData$CN[l1], MatchData$CytoScore[l1], main="CN", ylab="cytoscore", xlab="CN")
-plot(MatchData$PDL1exp[l1], MatchData$CytoScore[l1], main="PDL1 GE", ylab="cytoscore", xlab="pdl1exp")
+plot(MatchData$PDL1exp[l1], MatchData$CytoScore2[l1], main="PDL1 GE", ylab="cytoscore", xlab="pdl1exp")
 
-a1=lm(CytoScore~CN*PDL1exp+Purity, data=MatchData)
+a1=lm(CytoScore2~CN*PDL1exp+Purity, data=MatchData)
 ```
 
 
