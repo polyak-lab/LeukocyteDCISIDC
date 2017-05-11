@@ -1,5 +1,8 @@
 # ignore the following files
-
+online_public_data/*
 .DS_*
 .Rhistory
 .RData
+Leukocyte_DCIS_IDC_knitr_files/*
+data/Oslo_SNP_data/*
+Leukocyte_DCIS_IDC_knitr_cache/*

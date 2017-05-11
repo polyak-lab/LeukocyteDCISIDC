@@ -342,6 +342,8 @@ See if there are any associations between the CD4 and CD8 components: Figure S1B
 par(mfrow=c(2,2))
 # plot CD4 vs CD8 colour coded:
 plot(facs$CD8..T.cells, facs$CD4..T.cells, col=factor(tissues), xlab="CD8 proportion", ylab="CD4 proportion", pch=19)
+m1=lm(facs$CD4..T.cells~facs$CD8..T.cells)
+abline(m1)
 r1=cor.test(facs$CD8..T.cells, facs$CD4..T.cells)
 
 r2=sapply(unique(tissues), function(x) cor.test(facs$CD8..T.cells[tissues==x], 
@@ -354,6 +356,8 @@ legend("topright", as.character(c(round(r1$estimate*100)/100, round(r3*100)/100)
 
 plot(facs$CD8..T.cells, facs$macrophages, col=factor(tissues), xlab="CD8 proportion", 
      ylab="macrophage proportion", pch=19)
+m1=lm(macrophages~CD8..T.cells, data=subset(facs, tissues=="DCIS"))
+abline(m1, col="#FF6FCF")
 
 s1=cor.test(facs$CD8..T.cells, facs$macrophages)
 s2=sapply(unique(tissues), function(x) cor.test(facs$CD8..T.cells[tissues==x], 
@@ -365,7 +369,9 @@ legend("topright", as.character(c(round(s1$estimate*100)/100, round(s3*100)/100)
        col=c("black", factor(unique(tissues))), lty=ifelse(c(s1$p.value, s2)<0.05,3, 1), lwd=3)
 
 plot((facs$CD8..T.cells+facs$CD4..T.cells), facs$dendritic.cells, col=factor(tissues), xlab="CD8 + CD4", ylab="dendritic proportion", pch=19)
-
+facs$CD48tot=facs$CD4..T.cells+facs$CD8..T.cells
+m1=lm(dendritic.cells~CD48tot, data=subset(facs, tissues=="TN"))
+abline(m1, col="red")
 t1=cor.test((facs$CD8..T.cells+facs$CD4..T.cells), facs$dendritic.cells)
 t2=sapply(unique(tissues), function(x) cor.test((facs$CD8..T.cells+facs$CD4..T.cells)[tissues==x], 
                                                 facs$dendritic.cells[tissues==x])$p.value)
@@ -376,8 +382,14 @@ legend("topright", as.character(c(round(t1$estimate*100)/100, round(t3*100)/100)
        col=c("black", factor(unique(tissues))), lty=ifelse(c(t1$p.value, t2)<0.05,3, 1), lwd=3)
 
 plot(facs$gammadelta.Tcells, facs$NK.T.cells, col=factor(tissues), xlab="GD Tcells", ylab="NK Tcells", pch=19)
+m1=lm(NK.T.cells~gammadelta.Tcells, data=subset(facs, tissues=="HER2"))
+abline(m1, col="#8000FF")
+m1=lm(NK.T.cells~gammadelta.Tcells, data=subset(facs, tissues=="NP"))
+abline(m1, col="#008040")
+
 
 u1=cor.test(facs$gammadelta.Tcells, facs$NK.T.cells)
+
 u2=sapply(unique(tissues), function(x) cor.test(facs$gammadelta.Tcells[tissues==x], 
                                                 facs$NK.T.cells[tissues==x])$p.value)
 u3=sapply(unique(tissues), function(x) cor.test(facs$gammadelta.Tcells[tissues==x], 
@@ -454,6 +466,23 @@ axis(2, seq(0, 1, length=N), colnames(facs), las=2)
 dev.off()
 ```
 
+Expected number of positive Tregs:
+
+```{r, cache=T}
+cd45no=seq(100, to=30000, by=100)
+cd3dist=rnorm(200, 0.55, 0.04)
+tregdist=rpois(500, 4)/100
+testout=sapply(1:300, function(x) sapply(cd45no, function(x) x*sample(cd3dist,1)*sample(tregdist,1)))
+testQ=sapply(1:nrow(testout), function(x) quantile(testout[x, ], c(0.05, 0.95)))
+dataOut=data.frame(ncells=cd45no, expect=rowMedians(testout), ylow=testQ[1, ], yupp=testQ[2, ])
+ggplot(dataOut, aes(x=ncells, y=expect))+geom_smooth(method=lm, se=T)+
+  geom_ribbon(aes(ymin=ylow, ymax=yupp,alpha=0.1))+geom_vline(aes(xintercept=1000))+
+  ylab("expected no Tregs")+xlab("No CD45+ cells")+ggtitle("expected distribution of Tregs using FACS")
+ggplot(dataOut, aes(x=ncells, y=expect))+geom_smooth(method=lm, se=F)+
+  geom_ribbon(aes(ymin=ylow, ymax=yupp,alpha=0.1))+coord_cartesian(xlim = c(0, 750), ylim=c(0, 50))+ 
+  ylab("expected no Tregs")+xlab("No CD45+ cells")+ggtitle("expected distribution of Tregs in IF slide")
+
+```
 
 # Tcell RNA seq data: Figure 2
 
@@ -1352,11 +1381,48 @@ CresT2std$Var1 <- factor(CresT2std$Var1, levels =
 
 ```
 
+calculate p values:
+
+```{r}
+aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.CD8"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, Var1=="T.cells.gamma.delta"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.regulatory..Tregs."))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, Var1=="T.cells.CD4.naive"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.CD4.memory.activated"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.CD4.memory.resting"))
+summary(aovres)
+```
+
+
 ```{r}
 CresT2std$type[which(CresT2std$Var2%in%l2)]="TN"
 CresT2std$type[which(CresT2std$Var2%in%l1)]="HER2"
 #CresT2std$type[which(CresT2std$Var2%in%l3)]="Org"
 ggplot(CresT2std, aes(x=Var1 , y=value, fill=Var1))+geom_boxplot(stat="boxplot")+geom_point(aes(colour = Var1))+theme_bw()+theme(axis.text.x = element_text(angle = 90), strip.background = element_rect(fill="white"),panel.border = element_rect(colour="darkgrey", fill=NA, size=1),panel.background=element_rect(fill="white"), panel.grid.major=element_blank())+ facet_grid(~type,drop=TRUE, scale="free", space="free_x")+scale_fill_brewer(palette = "Pastel2")+scale_color_brewer(palette = c("Dark2"))
+```
+
+calculate p values
+
+```{r}
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD8"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.gamma.delta"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.regulatory..Tregs."))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.naive"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.memory.activated"))
+summary(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.memory.resting"))
+summary(aovres)
+aovres=aov(value~Var1+type, data=subset(CresT2std, type!="IDC"))
+summary(aovres)
 ```
 
 # Cell activity: exhaustion, cytotoxic signatures: Figures S3, S5
@@ -1573,6 +1639,8 @@ print('t-test group 1 vs 2')
 t.test(distance.tigit[distance.tigit[ ,2]<3, 1]~distance.tigit[distance.tigit[ ,2]<3, 2])
 print('t-test group 3 vs 4')
 t.test(distance.tigit[distance.tigit[ ,2]>2, 1]~distance.tigit[distance.tigit[ ,2]>2, 2])
+
+summary(factor(distance.tigit[ ,2]))
 ```
 
 ## PD1 staining 
@@ -1667,6 +1735,8 @@ lines(c(1, 2), c(54, 54), lwd = 2)
 text(1.5, 60, 'p-value = 0.96')
 lines(c(3, 4), c(54, 54), lwd = 2)
 text(3.5, 60, 'p-value = 0.012')
+
+summary(factor(distance.pd1[ ,2]))
 
 print('t-test group 1 vs 2')
 t.test(distance.pd1[distance.pd1[ ,2]<3, 1]~distance.pd1[distance.pd1[ ,2]<3, 2])
@@ -1807,7 +1877,7 @@ Load the TCGA GISTIC data and assess the frequency of PDL1 amplification in the 
 ```{r FigS7BC, fig.height=4.5, warning=F}
 BasHER2=as.character(TCGAClin$PATIENT_ID[which(TCGAClin$PAM50=="Basal")])
 n1=match(BasHER2, colnames(NewGistic))
-
+length(n1)
 ColIdNew=as.character(TCGAClin$PAM50[match(colnames(NewGistic), TCGAClin$PATIENT_ID)])
 ColIdNew=gsub("Basal", "red", ColIdNew)
 ColIdNew=gsub("Her2", "pink", ColIdNew)
