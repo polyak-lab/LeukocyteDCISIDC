@@ -10,7 +10,6 @@ output:
     fig_height: 6
     number_sections: yes
     toc: yes
-    toc_float: yes
 ---
 
 # Loading relevant data
@@ -466,7 +465,10 @@ axis(2, seq(0, 1, length=N), colnames(facs), las=2)
 dev.off()
 ```
 
-Expected number of positive Tregs:
+
+Estimating the expected proportion of cells: 
+
+Expected number of positive Tregs using uniform spatial distribution:
 
 ```{r, cache=T}
 cd45no=seq(100, to=30000, by=100)
@@ -483,6 +485,89 @@ ggplot(dataOut, aes(x=ncells, y=expect))+geom_smooth(method=lm, se=F)+
   ylab("expected no Tregs")+xlab("No CD45+ cells")+ggtitle("expected distribution of Tregs in IF slide")
 
 ```
+
+Sampling error Simulation
+
+```{r, cache=T}
+n <- 100000
+
+### homogeneous-uniform distribution
+ps <- seq(0.01, 0.5, 0.01)
+true.ps.1 <- dist.ps.1 <- matrix(NA, nrow = 500, ncol = length(ps))
+
+set.seed(42)
+for (b in 1:500) {
+    x <- runif(n)
+    y <- runif(n)
+    z <- runif(n)
+    for (p in ps) {
+        type <- rbinom(n, 1, p)
+        r <- 5
+        ss <- runif(r)
+        true.p <- mean(type)
+        est.p <- NULL
+        for (s in ss) {
+            indices <- which(z >= s - 4e-4 & z <= s + 4e-4)
+            p.hat <- mean(type[indices])
+            est.p <- c(est.p, p.hat)
+        }
+        dist.p <- mean((est.p / true.p - 1)^2)
+        dist.ps.1[b, which(ps == p)] <- dist.p
+        true.ps.1[b, which(ps == p)] <- true.p
+    }
+}
+
+### focal to global
+sizes <- seq(0.18, 0.5, 0.01)
+true.ps.2 <- dist.ps.2 <- matrix(NA, nrow = 500, ncol = length(sizes))
+
+set.seed(42)
+for (b in 1:500) {
+    x <- runif(n)
+    y <- runif(n)
+    z <- runif(n)
+    p <- 0.05
+    for (size in sizes) {
+        range <- c(0.5 - size, 0.5 + size)
+        indices.range <- which(x >= range[1] & x <= range[2] & y >= range[1] & y <= range[2] & z >= range[1] & z <= range[2])
+        p.new <- min(p * (n / length(indices.range)), 1)
+        type.ind <- rbinom(length(indices.range), 1, p.new)
+        type <- rep(0, n)
+        type[indices.range[which(type.ind == 1)]] <- 1
+        r <- 5
+        ss <- runif(r)
+        true.p <- mean(type)
+        est.p <- NULL
+        for (s in ss) {
+            indices <- which(z >= s - 4e-4 & z <= s + 4e-4)
+            p.hat <- mean(type[indices])
+            est.p <- c(est.p, p.hat)
+        }
+        dist.p <- mean((est.p / true.p - 1)^2)
+        dist.ps.2[b, which(sizes == size)] <- dist.p
+        true.ps.2[b, which(sizes == size)] <- true.p
+    }
+}
+
+plot(colMeans(true.ps.1), colMeans(dist.ps.1), type = 'l', lwd = 3, xlab = 'Population proportion p', ylab = 'Squared errors', col = 'dodgerblue2', axes = FALSE)
+axis(1)
+axis(2, las = 2)
+box()
+for (b in 1:500) {
+    lines(true.ps.1[b, ], dist.ps.1[b, ], col = 'lightgrey')
+}
+lines(colMeans(true.ps.1), colMeans(dist.ps.1), lwd = 3, col = 'dodgerblue2')
+
+plot(sizes, colMeans(dist.ps.2), type = 'l', lwd = 3, xlab = 'Evenness', ylab = 'Squared errors', col = 'dodgerblue2', axes = FALSE)
+axis(1)
+axis(2, las = 2)
+box()
+for (b in 1:500) {
+    lines(sizes, dist.ps.2[b, ], col = 'lightgrey')
+}
+lines(sizes, colMeans(dist.ps.2), lwd = 3, col = 'dodgerblue2')
+```
+
 
 # Tcell RNA seq data: Figure 2
 
@@ -1390,6 +1475,7 @@ aovres=aov(value~type, data=subset(CresT2std, Var1=="T.cells.gamma.delta"))
 summary(aovres)
 aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.regulatory..Tregs."))
 summary(aovres)
+TukeyHSD(aovres)
 aovres=aov(value~type, data=subset(CresT2std, Var1=="T.cells.CD4.naive"))
 summary(aovres)
 aovres=aov(value~type, data=subset(CresT2std,  Var1=="T.cells.CD4.memory.activated"))
@@ -1415,14 +1501,23 @@ aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.gamma
 summary(aovres)
 aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.regulatory..Tregs."))
 summary(aovres)
-aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.naive"))
+TukeyHSD(aovres)
+aovres=aov(value~type, data=subset(CresT2std, type!="N" & Var1=="T.cells.CD4.naive"))
 summary(aovres)
 aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.memory.activated"))
 summary(aovres)
+TukeyHSD(aovres)
 aovres=aov(value~type, data=subset(CresT2std, type!="IDC" & Var1=="T.cells.CD4.memory.resting"))
 summary(aovres)
 aovres=aov(value~Var1+type, data=subset(CresT2std, type!="IDC"))
 summary(aovres)
+```
+
+Run Tukey test to determine which is different
+
+```{r}
+
+
 ```
 
 # Cell activity: exhaustion, cytotoxic signatures: Figures S3, S5
